@@ -1,0 +1,67 @@
+apiVersion: extensions/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: postgresql
+spec:
+  privileged: false  # Don't allow privileged pods!
+  # The rest fills in some required fields.
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    rule: RunAsAny
+  runAsUser:
+    rule: MustRunAsNonRoot
+  fsGroup:
+    rule: RunAsAny
+  volumes:
+  - '*'
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: security-context-demo
+spec:
+  securityContext:
+    securityContext:
+    allowPrivilegeEscalation: false
+    add: ["NET_ADMIN", "SYS_TIME"]
+    runAsUser: 42
+    fsGroup: 42
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: postgresql
+  labels:
+    app: postgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+        - name: postgresql
+          image: gcr.io/habitat-kubernetes-playland/postgresql:latest
+          # command: ["sh", "-c", "chown -R 42:42 /hab/svc/postgresql/data"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+          env:
+            - name: HAB_POSTGRESQL
+          ports:
+            - containerPort: 5432
+              name: postgresql
+          volumeMounts:
+            - name: postgresql-persistent-storage
+              mountPath: /hab/svc/postgresql/data
+      volumes:
+        - name: postgresql-persistent-storage
+          gcePersistentDisk:
+            pdName: postgresql-disk
+            fsType: ext4

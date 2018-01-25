@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: chef-server
+spec:
+  containers:
+    - name: postgresql
+      image: gcr.io/habitat-kubernetes-playland/postgresql:latest
+      env:
+        - name: HAB_POSTGRESQL
+          value: foo
+      ports:
+        - containerPort: 5432
