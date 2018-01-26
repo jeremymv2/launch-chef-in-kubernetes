@@ -106,6 +106,11 @@ spec:
         - image: gcr.io/habitat-kubernetes-playland/chef-server-nginx:latest
           name: chef-server-nginx
           args: ["--peer", "chef-server-1", "--bind", "oc_erchef:oc_erchef.default", "--bind", "oc_bifrost:oc_bifrost.default", "--bind", "oc_id:oc_id.default", "--bind", "bookshelf:bookshelf.default", "--bind", "elasticsearch:elasticsearch.default", "--bind", "chef-server-ctl:chef-server-ctl.default", "--listen-gossip", "0.0.0.0:9656", "--listen-http", "0.0.0.0:9666"]
+          ports:
+            - containerPort: 8080
+              name: nginx-http
+            - containerPort: 8443
+              name: nginx-https
       volumes:
         - name: postgresql-persistent-storage
           gcePersistentDisk:
