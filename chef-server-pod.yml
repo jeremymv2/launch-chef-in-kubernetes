@@ -59,7 +59,8 @@ spec:
               name: postgresql
           volumeMounts:
             - name: postgresql-persistent-storage
-              mountPath: /mnt/data
+              mountPath: /hab/svc/postgresql/data
+              subPath: data
         - image: gcr.io/habitat-kubernetes-playland/chef-server-ctl:latest
           name: chef-server-ctl
           args: ["--peer", "chef-server-1", "--listen-gossip", "0.0.0.0:9650", "--listen-http", "0.0.0.0:9660"]
@@ -78,7 +79,8 @@ spec:
               name: elasticsearch
           volumeMounts:
             - name: elasticsearch-persistent-storage
-              mountPath: /mnt/data
+              mountPath: /hab/svc/elasticsearch/data
+              subPath: data
         - image: gcr.io/habitat-kubernetes-playland/oc_id:latest
           name: oc-id
           args: ["--peer", "chef-server-1", "--bind", "database:postgresql.default", "--bind", "chef-server-ctl:chef-server-ctl.default", "--listen-gossip", "0.0.0.0:9652", "--listen-http", "0.0.0.0:9662"]
@@ -111,6 +113,10 @@ spec:
               name: nginx-http
             - containerPort: 8443
               name: nginx-https
+          volumeMounts:
+            - name: nginx-persistent-storage
+              mountPath: /hab/svc/chef-server-nginx/data
+              subPath: data
       volumes:
         - name: postgresql-persistent-storage
           gcePersistentDisk:
@@ -119,4 +125,8 @@ spec:
         - name: elasticsearch-persistent-storage
           gcePersistentDisk:
             pdName: elasticsearch-disk
+            fsType: ext4
+        - name: nginx-persistent-storage
+          gcePersistentDisk:
+            pdName: nginx-disk
             fsType: ext4

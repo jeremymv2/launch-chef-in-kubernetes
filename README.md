@@ -1,8 +1,8 @@
 # launch-chef-in-kubernetes
 
-Launch Habitat Docker images of Chef Server in Kubernetes
+Launch Habitat Docker images of Chef Server as a Kubernetes Deployment
 
-Note: This is definitely a work in progress and may change completely as I learn more about Kubernetes.
+Note: This is definitely a work in progress and likely will change as I learn more about Kubernetes.
 
 ## Create a cluster
 
@@ -10,10 +10,20 @@ Note: This is definitely a work in progress and may change completely as I learn
 ./cluster-up.sh
 ```
 
+## Upload Docker images
+
+```bash
+# check if the images exist already first
+gcloud container images list
+
+./docker-image-upload.sh
+```
+
 ## Create the POD
 
 ```bash
 kubectl apply -f chef-server-pod.yml
+watch kubectl get pods
 ```
 
 ## Operations
@@ -26,6 +36,13 @@ for c in postgresql elasticsearch oc-id bookshelf oc-bifrost oc-erchef chef-serv
 Full logs for debugging
 ```bash
 kubectl cluster-info dump
+```
+
+Get Habitat ring info
+
+```bash
+kubectl exec -it $(kubectl get pods | grep -v NAME | awk '{print $1}') -c chef-server-ctl -- hab pkg install core/jq-static -b
+kubectl exec -it $(kubectl get pods | grep -v NAME | awk '{print $1}') -c chef-server-ctl -- curl localhost:9631/butterfly | jq
 ```
 
 Get a shell on a container
