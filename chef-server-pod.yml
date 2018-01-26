@@ -1,13 +1,117 @@
 apiVersion: v1
-kind: Pod
+kind: Service
+apiVersion: v1
+metadata:
+  name: chef-server-api
+spec:
+  selector:
+    app: chef-server
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 8080
+  - name: https
+    protocol: TCP
+    port: 443
+    targetPort: 8443
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
 metadata:
   name: chef-server
+  labels:
+    app: chef-server
 spec:
-  containers:
-    - name: postgresql
-      image: gcr.io/habitat-kubernetes-playland/postgresql:latest
-      env:
-        - name: HAB_POSTGRESQL
-          value: foo
-      ports:
-        - containerPort: 5432
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chef-server
+  template:
+    metadata:
+      labels:
+        app: chef-server
+      annotations:
+        pod.beta.kubernetes.io/init-containers: '[
+          {
+          "name": "sysctl",
+            "image": "busybox",
+            "command": ["sysctl", "-w", "vm.max_map_count=262144", "net.ipv6.conf.all.disable_ipv6=1"],
+            "securityContext": {
+              "privileged": true
+            }
+          }
+        ]'
+    spec:
+      hostname: chef-server-1
+      subdomain: default-subdomain
+      containers:
+        - image: gcr.io/habitat-kubernetes-playland/postgresql:latest
+          name: postgresql
+          env:
+            - name: HAB_POSTGRESQL
+              value: |
+                [superuser]
+                name = 'hab'
+                password = 'chefrocks'
+          ports:
+            - containerPort: 5432
+              name: postgresql
+          volumeMounts:
+            - name: postgresql-persistent-storage
+              mountPath: /mnt/data
+        - image: gcr.io/habitat-kubernetes-playland/chef-server-ctl:latest
+          name: chef-server-ctl
+          args: ["--peer", "chef-server-1", "--listen-gossip", "0.0.0.0:9650", "--listen-http", "0.0.0.0:9660"]
+          env:
+            - name: HAB_CHEF_SERVER_CTL
+              value: |
+                [chef_server_api]
+                ip = 'chef-server-api'
+                [secrets.data_collector]
+                token = '93a49a4f2482c64126f7b6015e6b0f30284287ee4054ff8807fb63d9cbd1c506'
+        - image: gcr.io/habitat-kubernetes-playland/elasticsearch:latest
+          name: elasticsearch
+          args: ["--peer", "chef-server-1", "--listen-gossip", "0.0.0.0:9651", "--listen-http", "0.0.0.0:9661"]
+          ports:
+            - containerPort: 9200
+              name: elasticsearch
+          volumeMounts:
+            - name: elasticsearch-persistent-storage
+              mountPath: /mnt/data
+        - image: gcr.io/habitat-kubernetes-playland/oc_id:latest
+          name: oc-id
+          args: ["--peer", "chef-server-1", "--bind", "database:postgresql.default", "--bind", "chef-server-ctl:chef-server-ctl.default", "--listen-gossip", "0.0.0.0:9652", "--listen-http", "0.0.0.0:9662"]
+        - image: gcr.io/habitat-kubernetes-playland/bookshelf:latest
+          name: bookshelf
+          args: ["--peer", "chef-server-1", "--bind", "database:postgresql.default", "--bind", "chef-server-ctl:chef-server-ctl.default", "--listen-gossip", "0.0.0.0:9653", "--listen-http", "0.0.0.0:9663"]
+        - image: gcr.io/habitat-kubernetes-playland/oc_bifrost:latest
+          name: oc-bifrost
+          args: ["--peer", "chef-server-1", "--bind", "database:postgresql.default", "--bind", "chef-server-ctl:chef-server-ctl.default", "--listen-gossip", "0.0.0.0:9654", "--listen-http", "0.0.0.0:9664"]
+        - image: gcr.io/habitat-kubernetes-playland/oc_erchef:latest
+          name: oc-erchef
+          args: ["--peer", "chef-server-1", "--bind", "bookshelf:bookshelf.default", "--bind", "oc_bifrost:oc_bifrost.default", "--bind", "database:postgresql.default", "--bind", "chef-server-ctl:chef-server-ctl.default", "--bind", "elasticsearch:elasticsearch.default", "--listen-gossip", "0.0.0.0:9655", "--listen-http", "0.0.0.0:9665"]
+          env:
+            - name: HAB_OC_ERCHEF
+              value: |
+                [chef_authn]
+                keygen_cache_workers=2
+                keygen_cache_size=10
+                keygen_start_size=0
+                keygen_timeout=20000
+                [data_collector]
+                enabled = false
+                server = "localhost"
+                port = 443
+        - image: gcr.io/habitat-kubernetes-playland/chef-server-nginx:latest
+          name: chef-server-nginx
+          args: ["--peer", "chef-server-1", "--bind", "oc_erchef:oc_erchef.default", "--bind", "oc_bifrost:oc_bifrost.default", "--bind", "oc_id:oc_id.default", "--bind", "bookshelf:bookshelf.default", "--bind", "elasticsearch:elasticsearch.default", "--bind", "chef-server-ctl:chef-server-ctl.default", "--listen-gossip", "0.0.0.0:9656", "--listen-http", "0.0.0.0:9666"]
+      volumes:
+        - name: postgresql-persistent-storage
+          gcePersistentDisk:
+            pdName: postgresql-disk
+            fsType: ext4
+        - name: elasticsearch-persistent-storage
+          gcePersistentDisk:
+            pdName: elasticsearch-disk
+            fsType: ext4
